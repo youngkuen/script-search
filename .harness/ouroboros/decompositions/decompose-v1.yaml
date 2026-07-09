@@ -1,0 +1,122 @@
+decomposition:
+  seed_ref: "seed-v1.yaml"
+  trd_ref: "docs/TRD.md"
+  total_tasks: 13
+  tasks:
+    - id: "T-001"
+      ac_ref: "AC-001"
+      layer: "data"
+      description: "data/script_loader.py — 1~3주차 txt 파일을 읽어 ScriptFile(status, raw_text)로 변환. 인코딩 오류·빈 파일은 status=skipped_*로 표시하고 로그만 남긴다 (예외를 상위로 전파하지 않음)"
+      test: "정상 파일 → status=valid, 인코딩 오류/빈 파일 → status=skipped_* + 로그 기록 확인"
+      depends_on: []
+      estimated_minutes: 20
+
+    - id: "T-002"
+      ac_ref: "AC-001"
+      layer: "logic"
+      description: "core/chunking.py — ScriptFile.raw_text(status=valid)를 [MM:SS] 타임스탬프 블록 단위로 파싱해 ScriptChunk 리스트로 변환"
+      test: "타임스탬프 경계 케이스, 마지막 블록, 빈 텍스트 입력 시 빈 리스트 반환 확인 (고정 문자열 fixture로 T-001과 독립적으로 테스트 가능)"
+      depends_on: ["T-001"]
+      estimated_minutes: 25
+
+    - id: "T-003"
+      ac_ref: "AC-002"
+      layer: "data"
+      description: "data/embedding_model.py — 로컬 다국어 임베딩 모델(intfloat/multilingual-e5-small) 로드, encode(text)/encode_batch(texts) 제공"
+      test: "샘플 한국어 문장을 인코딩했을 때 예상 차원(dim)의 벡터가 반환되는지 확인"
+      depends_on: []
+      estimated_minutes: 20
+
+    - id: "T-004"
+      ac_ref: "AC-002"
+      layer: "data"
+      description: "data/vector_store.py — ChromaDB persist client 래핑. add(chunk_id, vector, metadata), query(vector, top_k) 제공"
+      test: "임의 벡터로 add 후 동일 벡터로 query 시 자기 자신이 최상위로 반환되는지 확인 (임베딩 모델 없이 더미 벡터로 T-003과 독립 테스트 가능)"
+      depends_on: ["T-003"]
+      estimated_minutes: 25
+
+    - id: "T-005"
+      ac_ref: "AC-002"
+      layer: "logic"
+      description: "core/indexing.py — EmbedAndIndexChunk 오케스트레이션: 각 ScriptChunk에 대해 data.embedding_model.encode() 호출 → data.vector_store.add() 호출 → chunk.embedding_id 기록"
+      test: "가짜(mock) embedding_model/vector_store로 각 청크마다 encode+add가 정확히 1회씩 호출되는지 확인"
+      depends_on: ["T-002", "T-003", "T-004"]
+      estimated_minutes: 20
+
+    - id: "T-006"
+      ac_ref: "AC-003"
+      layer: "data"
+      description: "data/bm25_index.py — rank_bm25.BM25Okapi로 ScriptChunk 리스트에 대한 인덱스 구축, search(query_text, top_k) 제공"
+      test: "특정 키워드가 포함된 청크가 해당 키워드 쿼리에서 상위로 검색되는지 확인"
+      depends_on: ["T-002"]
+      estimated_minutes: 20
+
+    - id: "T-007"
+      ac_ref: "AC-004"
+      layer: "logic"
+      description: "core/scoring.py — ExecuteHybridSearch: data.vector_store.query() + data.bm25_index.search() 결과를 alpha로 가중합(hybrid_score) → threshold 필터 → rank순 top_n개 반환. 전부 미달 시 빈 리스트"
+      test: "hybrid_score 계산 공식 검증, threshold 경계값(정확히 같을 때 포함 여부) 검증, 전부 미달 시 빈 리스트 반환 검증"
+      depends_on: ["T-004", "T-006"]
+      estimated_minutes: 30
+
+    - id: "T-008"
+      ac_ref: "AC-005"
+      layer: "data"
+      description: "golden_set.yaml 직접 작성 (사용자 수동 작업) — question_text, expected_chunk, relevance_score(0~3) 15~20개. T-002까지 실행해 실제 ScriptChunk 내용을 확인한 뒤 작성"
+      test: "없음 (수동 콘텐츠 작성) — T-009의 로더 검증이 사실상의 검증 역할을 겸함"
+      depends_on: ["T-002"]
+      estimated_minutes: 30
+
+    - id: "T-009"
+      ac_ref: "AC-005"
+      layer: "data"
+      description: "data/golden_set_loader.py — golden_set.yaml을 읽어 GoldenSetItem 리스트로 변환, relevance_score가 {0,1,2,3} 범위인지 검증"
+      test: "고정된 fixture yaml 로드 시 올바른 GoldenSetItem 리스트가 나오는지, 범위 밖 relevance_score가 있으면 감지되는지 확인"
+      depends_on: ["T-008"]
+      estimated_minutes: 15
+
+    - id: "T-010"
+      ac_ref: "AC-006"
+      layer: "logic"
+      description: "core/evaluation.py — hit_rate_at_k(), mrr(), harmonic_mean() 순수 함수 구현 (다른 태스크와 무관하게 독립 개발 가능)"
+      test: "알고 있는 입력/출력으로 각 함수 검증 (예: 정답이 1위 → MRR=1.0, 5위 → MRR=0.2)"
+      depends_on: []
+      estimated_minutes: 25
+
+    - id: "T-011"
+      ac_ref: "AC-006"
+      layer: "logic"
+      description: "core/evaluation.py — sweep_alpha(): alpha 후보 0.0~1.0(0.1 간격, 11개)마다 ExecuteHybridSearch+골든셋으로 hit_rate_at_5·mrr 계산 → harmonic_mean 최대인 후보를 EvaluationRun.is_selected=true로 확정"
+      test: "합성 골든셋(정답을 알고 있는 소규모 데이터)으로 스윕 결과 중 정확히 1개만 is_selected=true인지 확인"
+      depends_on: ["T-007", "T-009", "T-010"]
+      estimated_minutes: 25
+
+    - id: "T-012"
+      ac_ref: "AC-007"
+      layer: "logic"
+      description: "확정된 alpha로 전체 골든셋에 대해 최종 Hit Rate@5·MRR 측정, ≥0.8 / ≥0.5 기준 충족 여부 확인 및 리포트"
+      test: "최종 지표를 출력하고 기준 미달 시 명확히 표시 (미달이면 청킹/임베딩/threshold를 재검토하는 다음 이슈로 이어짐 — AC-007 자체는 측정과 리포트까지가 범위)"
+      depends_on: ["T-011"]
+      estimated_minutes: 15
+
+    - id: "T-013"
+      ac_ref: "AC-008"
+      layer: "presentation"
+      description: "cli/main.py — 인터랙티브 루프: 질문 입력 → core.scoring.execute_hybrid_search(확정된 alpha 기본값) 호출 → 결과(파일명·시간·스니펫) 출력, 빈 리스트면 '관련 내용을 찾지 못했습니다' 출력"
+      test: "수동 검증 — 실제 질문 몇 개를 입력해 결과가 그럴듯한지 확인 (AC-008, TRD 5절 방침과 동일)"
+      depends_on: ["T-007", "T-011"]
+      estimated_minutes: 20
+
+  execution_order:
+    - phase: 1
+      tasks: ["T-001", "T-003", "T-010"]
+    - phase: 2
+      tasks: ["T-002", "T-004"]
+    - phase: 3
+      tasks: ["T-005", "T-006", "T-008"]
+    - phase: 4
+      tasks: ["T-007", "T-009"]
+    - phase: 5
+      tasks: ["T-011"]
+    - phase: 6
+      tasks: ["T-012", "T-013"]

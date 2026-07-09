@@ -1,0 +1,18 @@
+.env
+.env.local
+.env.*.local
+.review-artifacts/
+.harness/ouroboros/session.db
+
+.venv/
+.chroma/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 강의 스크립트 원문에서 파생된 골든셋 — 저작권 문제로 공개 리포에는 올리지 않음.
+# 형식만 보여주는 예시는 golden_set.example.yaml 참고.
+golden_set.yaml
+
+# 하네스 템플릿 예시 ADR — 프로젝트에 채워 넣지 않은 [TODO] 플레이스홀더뿐이라 제외.
+docs/adr.yaml

@@ -1,0 +1,24 @@
+# golden_set.yaml의 스키마를 보여주기 위한 예시 파일입니다.
+# 실제 골든셋(golden_set.yaml)은 메타코드 AI 엔지니어 부트캠프 강의 스크립트의
+# 실제 차시 제목을 expected_chunk로 담고 있어 저작권상 이 리포에는 포함하지 않았습니다.
+# (.gitignore 처리됨 — 로컬에만 존재)
+#
+# relevance_score: 3=완전히 정답, 2=상당히 관련, 1=약간 관련, 0=무관
+# chunk_id(expected_chunk)는 core.chunking.chunk_script()가 실제로 생성하는 값과
+# 정확히 일치해야 합니다.
+
+golden_set:
+  - item_id: "gs-01"
+    question_text: "가상환경 없이도 프로젝트별 의존성을 격리해주는 최신 파이썬 패키지 매니저는?"
+    expected_chunk: "1차시_ 1-1. 예시 강의 제목_0"
+    relevance_score: 3
+
+  - item_id: "gs-02"
+    question_text: "실무에서 가장 많이 쓰이는 벡터 인덱싱 알고리즘 두 가지는?"
+    expected_chunk: "2차시_ 2-1. 예시 강의 제목_3"
+    relevance_score: 3
+
+  - item_id: "gs-03"
+    question_text: "정량 평가의 시작과 끝이라 불리는, 정답이 미리 정의된 데이터셋을 뭐라고 부르나요?"
+    expected_chunk: "3차시_ 3-1. 예시 강의 제목_12"
+    relevance_score: 2

@@ -1,0 +1,40 @@
+date: "2026-07-09T16:50:00"
+seed_ref: "seed-v1.yaml"
+stages:
+  mechanical:
+    result: "pass"
+    details:
+      secrets: "pass"
+      boundaries: "pass (43 files checked)"
+      structure: "pass"
+      spec: "pass"
+      layers: "pass (47 patterns checked)"
+      security: "pass (built-in patterns; bandit not installed, skipped)"
+      deps: "pass-equivalent (pip-audit not installed, skipped)"
+      lint: "skip (ruff/flake8 not configured)"
+      type_check: "skip (mypy not configured)"
+      build: "pass (py_compile clean on all source files)"
+      tests: "pass (38/38)"
+  semantic:
+    result: "pass"
+    ac_compliance: {met: 8, total: 8}
+    goal_alignment: "aligned"
+    constraint_compliance: "pass"
+    ontology_drift: "medium"
+    ontology_drift_detail: >
+      SearchQuery, SearchResult는 시드에 명시된 별도 dataclass로 구현되지 않고
+      execute_hybrid_search()의 함수 파라미터/반환 튜플(chunk_id, hybrid_score)로
+      대체되었다. 기능적으로는 동등하나, 개별 vector_score/bm25_score/rank가
+      반환값에 남지 않아 사후 설명(explainability)이 필요해지면 확장이 필요하다.
+    layer_compliance: "pass"
+    test_by_layer: {logic: "100%", data: "100%", presentation: "manual only (intended per TRD)"}
+  judgment:
+    result: "skip"
+    reason: "Stage 2가 모호하지 않아 스킵 (모든 AC가 명확히 MET)"
+verdict: "pass"
+issues: []
+notes:
+  - "실제 corpus(75파일, 3623청크) end-to-end 실행: alpha=0.5 확정, Hit Rate@5=1.000, MRR=0.860 (둘 다 목표 초과)"
+  - "평가 과정에서 harness 템플릿 버그 다수 발견 및 수정: check-boundaries/structure/security/secrets.sh의 .venv 미제외로 인한 행/오탐, check-layers.sh의 cli/data 디렉토리 미인식, boundaries.yaml의 정규식 오탐(cli. 패턴이 'client'와 매칭), detect-violations.sh가 7개 게이트 중 3개만 실행"
+  - "chromadb의 Rust 바인딩이 한글 경로에서 저장된 HNSW 인덱스 재오픈에 실패하는 버그 발견 및 우회(persist 경로를 ASCII 경로로 변경)"
+  - "AC-005(골든셋)는 시드상 사용자 수동 작성이 원칙이었으나, 사용자 요청으로 Claude가 실제 corpus 검증을 거쳐 작성함 — 세션 내 명시적 의사결정 변경"

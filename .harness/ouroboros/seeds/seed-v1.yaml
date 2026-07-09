@@ -1,0 +1,251 @@
+# Seed Specification v1
+# Generated: 2026-07-09
+# Source Interview: .harness/ouroboros/interviews/2026-07-09-14-30.yaml
+# WARNING: This file is immutable. To change, create a new version.
+
+version: 1
+created: "2026-07-09T14:45:00"
+interview_ref: ".harness/ouroboros/interviews/2026-07-09-14-30.yaml"
+
+goal:
+  summary: "1~3주차 강의 스크립트를 하이브리드(BM25+Vector) 의미 검색으로 찾아주는 개인용 CLI 검색기를 만든다."
+  detail: >
+    임베딩(로컬 다국어 모델)과 ChromaDB, BM25 인덱스를 결합해 질문에 관련된
+    강의 스크립트 구간을 순위별로 반환한다. 답을 생성하지 않고 검색 결과만
+    제공하며, 직접 만든 골든셋으로 Hit Rate@5·MRR을 측정해 성능을 정량적으로
+    검증한다.
+  non_goals:
+    - "검색 결과를 근거로 LLM이 답을 생성하는 것 (RAG) — 5주차 이후 범위"
+    - "FastAPI 등으로 API 서빙하는 것 — 11주차 범위"
+    - "배포/클라우드 운영 — 12주차 범위"
+
+constraints:
+  must:
+    - "검색 대상은 1~3주차 강의 스크립트(강의 스크립트 크롤링/1주차_스크립트, 2주차_스크립트, 3주차_스크립트)로 한정한다"
+    - "임베딩은 로컬 오픈소스 다국어 모델을 사용한다 (API 키·비용 불필요)"
+    - "골든셋(15~20개, relevance_score 0~3)으로 Hit Rate@5 ≥ 0.8, MRR ≥ 0.5를 달성해야 한다"
+    - "hybrid_score가 threshold 미달인 결과는 노출하지 않고, 전부 미달이면 '관련 내용을 찾지 못했습니다'를 표시한다"
+    - "인코딩 오류·빈 스크립트 파일은 파이프라인을 중단하지 않고 조용히 skip하고 로그만 남긴다"
+  must_not:
+    - "검색 결과를 근거로 LLM 응답을 생성하지 않는다"
+    - "FastAPI 등 웹 서버로 서빙하지 않는다"
+  should:
+    - "응답 속도는 초기 제약이 아니며, 추후 개선 과제로 남긴다"
+    - "핵심 로직(청킹, 임베딩, 하이브리드 스코어링)은 단위 테스트를 작성한다"
+
+acceptance_criteria:
+  - id: "AC-001"
+    description: "1~3주차 스크립트 txt 파일을 읽어 [00:00] 타임스탬프 블록 단위로 ScriptChunk 리스트로 변환한다. 인코딩 오류·빈 파일은 skip하고 로그에 남긴다."
+    verification: "automated"
+    priority: "must"
+    complexity: "low"
+  - id: "AC-002"
+    description: "모든 ScriptChunk를 로컬 다국어 임베딩 모델로 인코딩하고 ChromaDB에 벡터+메타데이터로 저장한다."
+    verification: "automated"
+    priority: "must"
+    complexity: "medium"
+  - id: "AC-003"
+    description: "모든 ScriptChunk에 대해 BM25 인덱스를 구축한다."
+    verification: "automated"
+    priority: "must"
+    complexity: "low"
+  - id: "AC-004"
+    description: "SearchQuery가 주어지면 vector_score와 bm25_score를 alpha로 가중합한 hybrid_score를 계산하고, threshold 이상인 결과만 rank순으로 top_n개 반환한다. 전부 미달이면 빈 리스트를 반환한다."
+    verification: "automated"
+    priority: "must"
+    complexity: "medium"
+  - id: "AC-005"
+    description: "GoldenSetItem 15~20개를 직접 작성한다 (question_text, expected_chunk, relevance_score 0~3)."
+    verification: "manual"
+    priority: "must"
+    complexity: "low"
+  - id: "AC-006"
+    description: "후보 alpha 값들에 대해 Hit Rate@5와 MRR을 골든셋 기준으로 측정하고, 조화평균(combined_score)이 최대인 alpha를 EvaluationRun.is_selected=true로 확정한다."
+    verification: "automated"
+    priority: "must"
+    complexity: "medium"
+  - id: "AC-007"
+    description: "확정된 alpha로 최종 검증 시 Hit Rate@5 ≥ 0.8, MRR ≥ 0.5를 달성한다."
+    verification: "automated"
+    priority: "must"
+    complexity: "low"
+  - id: "AC-008"
+    description: "터미널에서 질문을 입력하면 하이브리드 검색을 호출해 결과(파일명·타임스탬프·텍스트 스니펫)를 순위별로 출력하는 CLI 루프를 제공한다."
+    verification: "manual"
+    priority: "must"
+    complexity: "low"
+
+ontology:
+  entities:
+    - name: "ScriptFile"
+      fields:
+        - {name: "file_path", type: "string", required: true}
+        - {name: "week_number", type: "number", required: true}
+        - {name: "status", type: "string", required: true}
+        - {name: "raw_text", type: "string", required: false}
+      relationships:
+        - {target: "ScriptChunk", type: "has_many"}
+    - name: "ScriptChunk"
+      fields:
+        - {name: "chunk_id", type: "string", required: true}
+        - {name: "script_file", type: "reference", required: true}
+        - {name: "start_timestamp", type: "string", required: true}
+        - {name: "end_timestamp", type: "string", required: true}
+        - {name: "text", type: "string", required: true}
+        - {name: "embedding_id", type: "reference", required: true}
+      relationships:
+        - {target: "ScriptFile", type: "belongs_to"}
+        - {target: "SearchResult", type: "has_many"}
+        - {target: "GoldenSetItem", type: "has_many"}
+    - name: "GoldenSetItem"
+      fields:
+        - {name: "item_id", type: "string", required: true}
+        - {name: "question_text", type: "string", required: true}
+        - {name: "expected_chunk", type: "reference", required: true}
+        - {name: "relevance_score", type: "number", required: true}
+      relationships:
+        - {target: "ScriptChunk", type: "belongs_to"}
+    - name: "SearchQuery"
+      fields:
+        - {name: "query_id", type: "string", required: true}
+        - {name: "query_text", type: "string", required: true}
+        - {name: "alpha", type: "number", required: true}
+        - {name: "top_n", type: "number", required: true}
+        - {name: "threshold", type: "number", required: true}
+      relationships:
+        - {target: "SearchResult", type: "has_many"}
+    - name: "SearchResult"
+      fields:
+        - {name: "result_id", type: "string", required: true}
+        - {name: "query", type: "reference", required: true}
+        - {name: "chunk", type: "reference", required: true}
+        - {name: "vector_score", type: "number", required: true}
+        - {name: "bm25_score", type: "number", required: true}
+        - {name: "hybrid_score", type: "number", required: true}
+        - {name: "rank", type: "number", required: true}
+      relationships:
+        - {target: "SearchQuery", type: "belongs_to"}
+        - {target: "ScriptChunk", type: "belongs_to"}
+    - name: "EvaluationRun"
+      fields:
+        - {name: "run_id", type: "string", required: true}
+        - {name: "alpha", type: "number", required: true}
+        - {name: "hit_rate_at_5", type: "number", required: true}
+        - {name: "mrr", type: "number", required: true}
+        - {name: "combined_score", type: "number", required: true}
+        - {name: "is_selected", type: "boolean", required: true}
+      relationships: []
+  actions:
+    - name: "IngestScriptFile"
+      actor: "Logic가 조율, Data가 파일 접근"
+      input: "file_path"
+      output: "ScriptFile (status=valid + raw_text, 또는 status=skipped_encoding_error/skipped_empty)"
+      side_effects:
+        - "인코딩 오류·빈 파일이면 로그 기록 후 조용히 skip. 파이프라인은 멈추지 않는다"
+    - name: "ChunkScript"
+      actor: "Logic"
+      input: "ScriptFile.raw_text (status=valid인 것만)"
+      output: "ScriptChunk 리스트 (타임스탬프 블록 단위)"
+      side_effects: []
+    - name: "EmbedAndIndexChunk"
+      actor: "Logic가 호출, Data가 저장"
+      input: "ScriptChunk.text"
+      output: "ScriptChunk.embedding_id (ChromaDB에 영속화)"
+      side_effects:
+        - "ChromaDB에 벡터+메타데이터 write"
+    - name: "BuildBM25Index"
+      actor: "Logic가 호출, Data가 저장"
+      input: "ScriptChunk 리스트"
+      output: "BM25 인덱스 구조 (도메인 엔티티 아님, Data 레이어 저장소)"
+      side_effects:
+        - "BM25 인덱스 구조 write"
+    - name: "BuildGoldenSet"
+      actor: "사용자 (수동 제작)"
+      input: "ScriptChunk 검토, question_text 작성, relevance_score 부여"
+      output: "GoldenSetItem 리스트 (15~20개)"
+      side_effects: []
+    - name: "ExecuteHybridSearch"
+      actor: "Presentation(CLI 입력) → Logic(스코어링)"
+      input: "SearchQuery"
+      output: "SearchResult 리스트 (hybrid_score 내림차순, threshold 이상만, 최대 top_n개) 또는 빈 리스트"
+      side_effects:
+        - "결과가 비면 CLI에 '관련 내용을 찾지 못했습니다' 출력"
+    - name: "TuneAlpha"
+      actor: "Logic (평가)"
+      input: "GoldenSetItem 리스트, 후보 alpha 값 집합"
+      output: "EvaluationRun 리스트 (후보별 hit_rate_at_5, mrr, combined_score), combined_score 최대인 것에 is_selected=true"
+      side_effects:
+        - "확정된 alpha가 이후 SearchQuery의 기본값이 됨"
+  invariants:
+    - "모든 ScriptChunk는 정확히 하나의 ScriptFile에 속한다"
+    - "ScriptFile.status가 skipped_*이면 그 파일에서 파생된 ScriptChunk는 0개다"
+    - "GoldenSetItem.relevance_score는 {0,1,2,3} 중 하나다 (완전 일치=3)"
+    - "SearchResult.hybrid_score = alpha * vector_score + (1 - alpha) * bm25_score, alpha ∈ [0,1]"
+    - "hybrid_score < threshold인 결과는 노출되지 않는다 — '낮은 점수의 결과'와 '결과 없음'은 다른 상태다"
+    - "동시에 is_selected=true인 EvaluationRun은 정확히 1개다"
+    - "SearchResult, SearchQuery는 비영속(ephemeral)이다 — DB에 저장되는 것은 ScriptFile, ScriptChunk, GoldenSetItem, EvaluationRun뿐이다"
+
+architecture:
+  pattern: "3-tier-layered"
+  layers:
+    presentation:
+      description: "CLI 입출력 — 질문을 받아 검색을 호출하고 결과를 터미널에 출력"
+      directories: ["cli/"]
+      responsibilities:
+        - "질문 입력 수집"
+        - "결과(파일명·타임스탬프·스니펫) 출력 포맷팅"
+        - "'관련 내용을 찾지 못했습니다' 메시지 처리"
+      cannot_access: ["database", "external_services"]
+    logic:
+      description: "청킹, 임베딩 호출 조율, 하이브리드 스코어링, alpha 튜닝, 골든셋 평가"
+      directories: ["core/"]
+      responsibilities:
+        - "ChunkScript, EmbedAndIndexChunk, BuildBM25Index 조율"
+        - "ExecuteHybridSearch 스코어링(hybrid_score 계산, threshold 필터링)"
+        - "TuneAlpha (Hit Rate@5·MRR 계산, alpha 확정)"
+      cannot_access: []
+    data:
+      description: "ChromaDB 벡터 저장소, BM25 인덱스, 원본 스크립트 파일 접근"
+      directories: ["data/"]
+      responsibilities:
+        - "ChromaDB read/write"
+        - "BM25 인덱스 구축/조회"
+        - "스크립트 파일 read"
+      cannot_access: ["presentation"]
+  layer_communication:
+    presentation_to_logic: "direct call (CLI 함수 호출)"
+    logic_to_data: "repository-style 함수 호출 (예: chunk_repo.save(), vector_store.query())"
+    data_format: "dataclass/dict (DTO 역할, ORM 없음)"
+
+scope:
+  mvp:
+    - "AC-001~AC-008 전체 (Phase 0~6: 환경 세팅 → 청킹 → 임베딩 → ChromaDB/BM25 → 하이브리드 검색 → 골든셋 평가 → CLI)"
+  future:
+    - "검색 결과 기반 LLM 답변 생성 (RAG)"
+    - "FastAPI로 API화"
+    - "Docker 배포"
+    - "응답 속도 최적화"
+    - "전체 강의자료(pptx/pdf)까지 검색 대상 확장"
+
+tech_decisions:
+  - decision: "임베딩 모델: 로컬 오픈소스 다국어 모델 (예: intfloat/multilingual-e5-small)"
+    reason: "API 키·비용 없이 바로 실습 가능하고, 한국어 강의 스크립트 검색에 필요한 다국어 지원을 갖춤"
+    alternatives_considered:
+      - "OpenAI 등 API 기반 임베딩 (품질은 높지만 비용·키 필요, 이번 학습 목표와 안 맞음)"
+  - decision: "Vector DB: ChromaDB (로컬 persist)"
+    reason: "3주차에서 배운 로컬 벡터 저장소이며, 별도 서버 운영이 필요 없음"
+    alternatives_considered:
+      - "Pinecone (클라우드 SaaS, 이 프로젝트 규모엔 과함)"
+      - "Milvus (대규모 클러스터용, 불필요)"
+  - decision: "청킹 단위: 스크립트의 [00:00] 타임스탬프 블록"
+    reason: "스크립트 자체 구조가 이미 자연스러운 검색 단위를 제공함"
+    alternatives_considered:
+      - "고정 길이 슬라이딩 윈도우 청킹"
+  - decision: "alpha 확정 기준: Hit Rate@5와 MRR의 조화평균(harmonic mean) 최대화"
+    reason: "인터뷰에서 평균/조화평균 둘 다 열려 있었으나, 조화평균은 두 지표 중 하나가 낮으면 강하게 페널티를 줘서 한쪽 지표에 치우친 alpha 선택을 방지함"
+    alternatives_considered:
+      - "산술평균 (한쪽 지표만 높아도 점수가 높게 나올 수 있어 균형이 덜 보장됨)"
+  - decision: "SearchResult/SearchQuery는 비영속(ephemeral) — DB에 저장하지 않음"
+    reason: "검색은 상태를 남길 필요 없는 1회성 조회이며, 영속 대상은 ScriptFile/ScriptChunk/GoldenSetItem/EvaluationRun로 한정"
+    alternatives_considered:
+      - "검색 로그를 DB에 저장 (지금은 불필요, future scope로 남김)"
