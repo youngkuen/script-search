@@ -20,7 +20,9 @@ WEEK_DIRS = {
     1: CORPUS_ROOT / "1주차_스크립트",
     2: CORPUS_ROOT / "2주차_스크립트",
     3: CORPUS_ROOT / "3주차_스크립트",
+    4: CORPUS_ROOT / "4주차_스크립트",
 }
+COLLECTION_NAME = "script_chunks_v2"
 
 
 def main() -> None:
@@ -38,7 +40,7 @@ def main() -> None:
     print(f"   청크 {len(all_chunks)}개")
 
     print("3. 임베딩 + ChromaDB 색인 (시간이 걸립니다)...")
-    vector_store = VectorStore(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name="script_chunks")
+    vector_store = VectorStore(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name=COLLECTION_NAME)
     if vector_store.count() != len(all_chunks):
         index_chunks(all_chunks, vector_store)
     print(f"   색인 완료. 총 {vector_store.count()}개 벡터 (소요 {time.time() - t0:.1f}s)")

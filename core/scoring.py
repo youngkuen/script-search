@@ -22,13 +22,28 @@ def execute_hybrid_search(
     threshold: float = 0.0,
     candidate_k: int = 20,
     embed_fn: Callable[[str], object] | None = None,
+    week_filter: int | None = None,
+    id_week_map: dict[str, int] | None = None,
 ) -> list[tuple[str, float]]:
     if embed_fn is None:
-        from data.embedding_model import encode as embed_fn
+        # 질문(쿼리)은 query 프리픽스로 인코딩한다 (e5 비대칭 임베딩).
+        from data.embedding_model import encode_query as embed_fn
 
     query_vector = embed_fn(query_text)
-    vector_results = vector_store.query(query_vector, top_k=candidate_k)
-    bm25_results = bm25_index.search(query_text, top_k=candidate_k)
+
+    # 주차 필터: 벡터 쪽은 chromadb where 조건으로, BM25 쪽은 후보를 주차로 걸러낸다.
+    if week_filter is not None:
+        vector_results = vector_store.query(
+            query_vector, top_k=candidate_k, where={"week": {"$eq": week_filter}}
+        )
+        bm25_results = bm25_index.search(query_text, top_k=candidate_k * 10)
+        if id_week_map is not None:
+            bm25_results = [
+                (cid, s) for cid, s in bm25_results if id_week_map.get(cid) == week_filter
+            ][:candidate_k]
+    else:
+        vector_results = vector_store.query(query_vector, top_k=candidate_k)
+        bm25_results = bm25_index.search(query_text, top_k=candidate_k)
 
     # chromadb의 query()는 distance(낮을수록 유사)를 반환한다.
     # 부호를 뒤집어 "높을수록 유사"로 맞춘 뒤 min-max 정규화한다.
