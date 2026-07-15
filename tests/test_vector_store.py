@@ -32,3 +32,15 @@ def test_metadata_is_stored(tmp_path: Path):
 
     result = store._collection.get(ids=["a"], include=["metadatas"])
     assert result["metadatas"][0]["week"] == 1
+
+
+def test_query_where_filters_by_metadata(tmp_path: Path):
+    store = VectorStore(persist_directory=str(tmp_path))
+
+    # 같은 벡터라도 week 메타데이터가 다르면 where로 걸러져야 한다.
+    store.add("w1", [1.0, 0.0], metadata={"week": 1})
+    store.add("w4", [1.0, 0.0], metadata={"week": 4})
+
+    results = store.query([1.0, 0.0], top_k=5, where={"week": {"$eq": 4}})
+
+    assert [cid for cid, _ in results] == ["w4"]
