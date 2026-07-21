@@ -4,6 +4,7 @@
 (data/embedding_model.py가 다국어 e5 임베딩을 쓰는 것과 같은 이유).
 """
 
+import torch
 from sentence_transformers import CrossEncoder
 
 CROSS_ENCODER_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
@@ -19,8 +20,14 @@ def get_reranker() -> CrossEncoder:
 
 
 def score_pairs(query: str, texts: list[str]) -> list[float]:
-    """(query, text) 쌍마다 관련성 점수를 반환한다. 순서는 texts와 동일하다."""
+    """(query, text) 쌍마다 0~1로 정규화된 관련성 점수를 반환한다. 순서는 texts와 동일하다.
+
+    Sigmoid 활성화(activation_fn)를 명시한다 — 기본값(원시 로짓)은 범위가 정해져 있지
+    않아(음수~두 자릿수) core/confidence.py의 신뢰도 임계값(0.7/0.4)이 무의미해진다
+    (4-2 강의: "activation_fn=Sigmoid를 추가하면 0~1로 정규화된다").
+    """
     if not texts:
         return []
     pairs = [(query, text) for text in texts]
-    return [float(s) for s in get_reranker().predict(pairs)]
+    scores = get_reranker().predict(pairs, activation_fn=torch.nn.Sigmoid())
+    return [float(s) for s in scores]
