@@ -36,27 +36,37 @@
 
 ## 아키텍처
 
-3-tier 레이어 분리를 강제하며 진행했습니다 (레이어를 건너뛰는 import는 커밋 전 게이트가 차단).
-5주차 확장으로 검색 파이프라인 뒤에 재랭킹·답변 생성·평가·모니터링이 추가됐습니다:
+### 데이터 흐름 (파이프라인)
+
+색인은 한 번만 실행되는 오프라인 단계이고, 질의응답은 질문마다 실행되는 온라인 단계입니다.
+임베딩이 색인 시점과 검색 시점에 **각각 다른 프리픽스로 두 번** 쓰이는 것(비대칭 임베딩,
+4주차)과, 벡터DB에 저장만 해서는 부족하고 검색·재랭킹을 거쳐야 LLM에 넘길 근거가 만들어지는
+것이 이 파이프라인에서 가장 중요한 두 지점입니다.
 
 ```
-질문
-  │
-  ▼
-Presentation (cli/main.py)
-  │  질문 입력 · 답변+출처+신뢰도 출력 · .env 로드 · LangSmith tracing 켜기
-  ▼
-Logic (core/)
-  │  하이브리드 검색(scoring.py) ──▶ Cross-Encoder 재랭킹(reranking.py, rag_pipeline.py)
-  │        ▼
-  │  RAG 답변 생성(rag_chain.py) — 4원칙 프롬프트 + 신뢰도(confidence.py)
-  │        ▼
-  │  RAGAS 평가(rag_evaluation.py, 오프라인 배치)
-  ▼
-Data (data/)
-     ChromaDB · BM25 · 로컬 임베딩 · Anthropic Claude(llm_client.py) ·
-     다국어 Cross-Encoder(reranker.py) · LangSmith(langsmith_setup.py, 옵션)
+[오프라인] 색인 — 문서가 바뀔 때만 재실행
+  데이터(원본 스크립트)
+    ──▶ 청킹 (전처리: 유니코드 정규화 포함 + 토큰 256개 예산으로 블록 병합, chunking.py)
+    ──▶ 임베딩 · passage 프리픽스 (embedding_model.py, indexing.py)
+    ──▶ 벡터DB 저장 (ChromaDB, vector_store.py)
+
+[온라인] 질의응답 — 질문마다 실행
+  질문
+    ──▶ 임베딩 · query 프리픽스 (embedding_model.py)          ← 임베딩이 색인 때와 별도로 한 번 더
+    ──▶ 검색 · BM25+벡터 하이브리드, 20개 후보 (scoring.py)
+    ──▶ 재랭킹 · Cross-Encoder로 5개로 압축 (reranker.py, reranking.py, rag_pipeline.py)
+    ──▶ LLM 답변 생성 · Claude Haiku, 4원칙 프롬프트 (llm_client.py, rag_chain.py)
+    ──▶ 답변 + 출처 + 신뢰도 (confidence.py)
+
+[오프라인, 옵션] 평가 · 모니터링
+  RAGAS 평가 — 위 온라인 파이프라인 전체를 배치로 재실행해 품질 측정 (rag_evaluation.py)
+  LangSmith — 온라인 단계 실행 중 각 호출을 옆에서 기록만 함, 파이프라인 흐름엔 안 끼어듦 (옵션, langsmith_setup.py)
 ```
+
+### 3-Tier 레이어
+
+3-tier 레이어 분리를 강제하며 진행했습니다 (레이어를 건너뛰는 import는 커밋 전 게이트가 차단).
+위 파이프라인의 각 단계는 아래 세 디렉토리 중 하나에 속합니다:
 
 | 레이어 | 디렉토리 | 책임 |
 |---|---|---|
