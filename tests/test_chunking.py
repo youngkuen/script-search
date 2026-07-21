@@ -53,7 +53,9 @@ def test_chunk_script_assigns_sequential_chunk_ids():
         raw_text="[00:00] 첫 문장.\n\n[00:20] 둘째 문장.",
     )
 
-    chunks = chunk_script(valid)
+    # block 전략을 명시한다 — 이 테스트는 "블록 1개=청크 1개" 순차 ID 부여 로직 자체를
+    # 검증하는 것이지 파이프라인 기본 전략(tokens)에 종속된 테스트가 아니다.
+    chunks = chunk_script(valid, strategy="block")
 
     assert [c.chunk_id for c in chunks] == ["1차시_0", "1차시_1"]
     assert chunks[0].script_file == Path("1차시.txt")

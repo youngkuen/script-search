@@ -222,5 +222,67 @@ block_30: "ANN, 영어로는 Approximate Nearest Neighbor라고 합니다." ← 
 
 ### 결정 / 후속 TODO
 - [x] **golden_set.yaml 수정 없음** — expected_chunk 6개 전부 실제 정답 위치가 맞음을 확인했으므로, 검색이 못 찾는다고 정답 위치를 바꾸는 것은 골든셋을 왜곡하는 것이라 판단해 그대로 뒀다.
-- [ ] gs-24 같은 "같은 강의 내 블록 경계 절단" 유형은 merged/tokens 청킹 채택으로 개선될 가능성이 높다 — 위 청킹 전략 채택 여부 결정 시 이 사례를 재검증 기준으로 삼는다.
+- [x] gs-24 같은 "같은 강의 내 블록 경계 절단" 유형은 merged/tokens 청킹 채택으로 개선될 가능성이 높다 — 아래 "청킹 전략 채택" 항목에서 실제로 검증·채택했다.
 - [ ] gs-26 같은 "여러 강의에 흩어진 사실" 유형은 청킹 전략과 무관한 별개 문제 — 필요하다면 쿼리 확장(query expansion)이나 강의명 기반 메타데이터 가중치 조정 같은 다른 접근이 필요하다(현재는 미착수, 향후 과제로만 남김).
+
+---
+
+## 2026-07-22 — 청킹 전략 채택 결정: block → tokens
+
+### 배경
+2026-07-16 실험에서 tokens 전략이 Hit Rate@5·MRR 모두 최상이었지만 재색인·alpha 재스윕·
+골든셋 재산정 비용 때문에 채택을 미뤄뒀었다. 같은 날 진행한 4주차 골든셋 검토에서 gs-24가
+정확히 그 실험이 예측한 실패 유형(블록 경계 절단)의 실제 사례로 확인되어, 채택 여부를
+최종 결정했다.
+
+### 마이그레이션
+1. `core/chunking.py::chunk_script()`의 기본 `strategy`를 `"block"`→`"tokens"`(max_tokens=256)로 변경.
+2. ChromaDB 컬렉션명을 `script_chunks_v2`→`script_chunks_v3`로 교체(`cli/main.py`, `scripts/run_evaluation.py`, `scripts/run_ragas_evaluation.py` 3곳) — 벡터 표현이 달라졌으므로 이전 컬렉션과 섞이지 않게 함.
+3. `golden_set.yaml` 26개 항목의 `expected_chunk`를 새 chunk_id로 재매핑. block 전략에서의 정답
+   원문(needle)을 tokens 전략의 어느 청크가 포함하는지 자동 탐색하는 스크립트로 처리 —
+   26개 전부 충돌·실패 없이 매핑됨.
+4. `scripts/run_evaluation.py`로 alpha 재스윕.
+
+### 결과
+
+**검색 지표 (Hit Rate@5 / MRR, 26문항 전체)**
+
+| | block (기존) | tokens (신규) |
+|---|---|---|
+| 청크 수 | 5,120 | 1,158 |
+| alpha | 0.5 | 0.4 |
+| Hit Rate@5 | 0.885 | **0.923** |
+| MRR | 0.782 | **0.788** |
+| 색인 시간 | ~330s | ~134s |
+
+**RAGAS 지표 (검색+생성 전체, golden_set ground_truth 26개)**
+
+| 지표 | block (기존) | tokens (신규) |
+|---|---|---|
+| Faithfulness | 0.878 | **0.958** |
+| Answer Relevancy | 0.790 | **0.859** |
+| Context Precision | 0.844 | **0.910** |
+| Context Recall | 0.962 | **1.000** |
+
+4개 지표 전부 개선됐다. tokens 청킹이 청크당 더 완전한 문맥을 담기 때문에 검색뿐 아니라
+LLM 생성 품질에도 도움이 된 것으로 해석된다.
+
+### 개별 항목 단위 트레이드오프 (4주차 골든셋 재검증)
+- **gs-24 (블록 경계 절단) — 고쳐짐**: rank 없음(miss) → rank 1. 가설이 확인됐다.
+- **gs-23 — 새로 실패**: block에서는 rank 3(hit)였는데 tokens에서는 top-5 밖으로 밀림.
+  경쟁 청크("13차시 실습")가 블록 병합으로 더 크고 강하게 매칭된 것으로 보인다.
+- **gs-26 (강의 간 경쟁) — 예상대로 여전히 실패**: 청킹 전략과 무관한 문제라 그대로다.
+- 개별 항목 단위로는 트레이드오프가 있지만(하나 고치고 하나 깨짐), 26문항 전체 집계
+  지표(Hit Rate@5, RAGAS 4종)는 전부 순개선이다.
+
+### 한계
+- RAGAS 재평가 중 104개 판정 작업 중 1개가 `LLMDidNotFinishException`(max_tokens 부족)으로
+  실패했다. Context Recall=1.000처럼 극단적으로 높은 수치는 이 결측 1건의 영향을 받았을 수
+  있어, "완벽하다"기보다 "강한 개선 신호"로 해석하는 것이 정직하다.
+- gs-23 회귀 사례처럼 청킹 전략 변경은 전역적으로 검색 분포를 바꾸므로, 개별 항목 단위의
+  완벽한 무손실 개선은 기대하기 어렵다.
+
+### 결정 / 후속 TODO
+- [x] **tokens 전략 채택** — `core/chunking.py` 기본값 변경, alpha=0.4로 재확정, golden_set 26개 재매핑 완료.
+- [ ] gs-23 회귀 원인(경쟁 청크와의 병합 효과)을 더 깊이 파보고 싶다면, `13차시_ 3-2. 실습` 챕터의 tokens 청크 내용을 직접 대조해 볼 것.
+- [ ] RAGAS 판정 실패(`LLMDidNotFinishException`) 재현 시 판정 LLM의 `max_tokens` 설정을 늘려 재시도하는 로직을 `core/rag_evaluation.py`에 추가할지 검토.

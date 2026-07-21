@@ -22,7 +22,7 @@ WEEK_DIRS = {
     3: CORPUS_ROOT / "3주차_스크립트",
     4: CORPUS_ROOT / "4주차_스크립트",
 }
-COLLECTION_NAME = "script_chunks_v2"
+COLLECTION_NAME = "script_chunks_v3"  # tokens 청킹 전환(2026-07-22) — 이전 컬렉션과 벡터 표현이 다름
 
 
 def main() -> None:

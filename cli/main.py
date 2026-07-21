@@ -24,7 +24,7 @@ from core.rag_chain import generate_answer  # noqa: E402
 
 load_dotenv_if_present(PROJECT_ROOT / ".env")  # ANTHROPIC_API_KEY 등을 .env에서 읽어 os.environ에 채운다
 
-ALPHA = 0.5  # 1~4주차 코퍼스(5,120청크)·골든셋 26문항 재스윕으로 확정 — Hit Rate@5=0.885, MRR=0.782
+ALPHA = 0.4  # tokens 청킹 전환(2026-07-22) 후 재스윕으로 확정 — Hit Rate@5=0.923, MRR=0.788 (1,158청크)
 HYBRID_TOP_N = 20  # 1단계: 하이브리드 검색으로 넓게 뽑는 후보 수 (Part 4-2)
 RERANK_TOP_N = 5   # 2단계: Cross-Encoder 재랭킹 후 LLM에 전달할 최종 청크 수
 THRESHOLD = 0.0
@@ -38,7 +38,7 @@ WEEK_DIRS = {
 
 # 비대칭 임베딩(프리픽스)·코사인 거리공간·week 메타데이터가 추가되어 벡터 표현이 바뀌었으므로
 # 기존 컬렉션과 섞이지 않도록 새 컬렉션 이름을 쓴다 (재색인은 자동으로 이루어진다).
-COLLECTION_NAME = "script_chunks_v2"
+COLLECTION_NAME = "script_chunks_v3"  # tokens 청킹 전환(2026-07-22) — 이전 컬렉션과 벡터 표현이 다름
 
 
 def build_pipeline():

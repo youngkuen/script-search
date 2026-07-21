@@ -1,9 +1,14 @@
 """ChunkScript — 스크립트를 ScriptChunk로 분할한다.
 
 세 가지 청킹 전략을 지원한다 (Part 2-3 청킹 전략 실습):
-- "block"  : [MM:SS] 타임스탬프 블록 하나 = 청크 하나 (기본, 기존 동작)
+- "block"  : [MM:SS] 타임스탬프 블록 하나 = 청크 하나 (기존 동작)
 - "merged" : 연속한 블록을 group_size개씩 병합 (모드 A — 문맥 확대)
-- "tokens" : 모델 토큰 예산(max_tokens)을 넘지 않게 블록을 이어붙여 분할 (모드 B — 토큰 기반)
+- "tokens" : 모델 토큰 예산(max_tokens)을 넘지 않게 블록을 이어붙여 분할 (모드 B — 토큰 기반, 기본값)
+
+기본값을 block에서 tokens로 전환함(2026-07-22): block/merged/tokens 3종 비교 실험에서
+tokens가 Hit Rate@5·MRR 모두 최상이면서 청크 수가 가장 적었고, 이후 4주차 골든셋 검토에서
+"개념이 블록 경계에서 잘려 검색을 놓치는" 실패 사례(gs-24)가 실제로 확인되어 최종 채택했다.
+근거: docs/EXPERIMENTS.md, docs/adr.yaml 참고.
 """
 
 import re
@@ -98,7 +103,7 @@ def chunk_text_by_tokens(
     return chunks
 
 
-def chunk_script(script_file: ScriptFile, strategy: str = "block", **kwargs) -> list[ScriptChunk]:
+def chunk_script(script_file: ScriptFile, strategy: str = "tokens", **kwargs) -> list[ScriptChunk]:
     if script_file.status != "valid" or not script_file.raw_text:
         return []
 

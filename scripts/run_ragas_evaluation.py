@@ -25,8 +25,8 @@ WEEK_DIRS = {
     3: CORPUS_ROOT / "3주차_스크립트",
     4: CORPUS_ROOT / "4주차_스크립트",
 }
-COLLECTION_NAME = "script_chunks_v2"
-ALPHA = 0.5
+COLLECTION_NAME = "script_chunks_v3"  # tokens 청킹 전환(2026-07-22) — 이전 컬렉션과 벡터 표현이 다름
+ALPHA = 0.4  # tokens 청킹 전환(2026-07-22) 후 재스윕으로 확정 — Hit Rate@5=0.923, MRR=0.788
 MIN_RECOMMENDED_SAMPLES = 20  # Part 6-1: RAGAS는 통계적 유의미성을 위해 20개 이상 권장
 
 
