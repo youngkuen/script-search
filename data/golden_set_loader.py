@@ -14,6 +14,7 @@ class GoldenSetItem:
     question_text: str
     expected_chunk: str
     relevance_score: int
+    ground_truth: str | None = None  # RAGAS Context Recall용 정답 텍스트 (Part 6-1). 없으면 RAGAS 평가 대상에서 제외.
 
 
 def load_golden_set(path: Path) -> list[GoldenSetItem]:
@@ -34,6 +35,7 @@ def load_golden_set(path: Path) -> list[GoldenSetItem]:
                 question_text=entry["question_text"],
                 expected_chunk=entry["expected_chunk"],
                 relevance_score=score,
+                ground_truth=entry.get("ground_truth"),
             )
         )
     return items

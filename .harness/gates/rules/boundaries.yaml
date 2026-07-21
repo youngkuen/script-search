@@ -14,8 +14,8 @@
 # "from cli", "import cli" 처럼 실제 import 문 형태로 구체적으로 적어야 한다.
 project_layers:
   - from: "cli"
-    cannot_import: ["chromadb", "rank_bm25"]
-    reason: "[LAYER:P→D] Presentation(cli/)에서 Data 레이어 라이브러리(ChromaDB, BM25) 직접 사용 금지. core/를 경유"
+    cannot_import: ["chromadb", "rank_bm25", "langchain_anthropic", "ragas", "sentence_transformers"]
+    reason: "[LAYER:P→D] Presentation(cli/)에서 Data 레이어 라이브러리(ChromaDB, BM25, LLM/재랭킹/RAGAS SDK) 직접 사용 금지. core/를 경유"
     stacks: [python]
     file_patterns: ["*.py"]
 

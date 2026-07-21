@@ -1,4 +1,8 @@
-"""강의 스크립트 의미 검색기 — 인터랙티브 CLI."""
+"""강의 스크립트 QA 시스템 — 인터랙티브 CLI (Part 5주차 RAG 확장).
+
+질문을 입력하면 하이브리드 검색(4-1) + Cross-Encoder 재랭킹(4-2)으로 근거 청크를 좁히고,
+LangChain 기반 답변 생성(5-1)을 거쳐 답변 + 출처 + 신뢰도(5-2)를 함께 보여준다.
+"""
 
 import sys
 from pathlib import Path
@@ -7,15 +11,22 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CORPUS_ROOT = PROJECT_ROOT.parent / "강의 스크립트 크롤링"
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from data.env_loader import load_dotenv_if_present  # noqa: E402
 from data.script_loader import load_all  # noqa: E402
 from data.vector_store import VectorStore, DEFAULT_PERSIST_DIR  # noqa: E402
 from data.bm25_index import BM25Index  # noqa: E402
+from data.llm_client import get_chat_model  # noqa: E402
+from data.langsmith_setup import enable_tracing  # noqa: E402
 from core.chunking import chunk_script  # noqa: E402
 from core.indexing import index_chunks  # noqa: E402
-from core.scoring import execute_hybrid_search  # noqa: E402
+from core.rag_pipeline import retrieve_and_rerank  # noqa: E402
+from core.rag_chain import generate_answer  # noqa: E402
+
+load_dotenv_if_present(PROJECT_ROOT / ".env")  # ANTHROPIC_API_KEY 등을 .env에서 읽어 os.environ에 채운다
 
 ALPHA = 0.5  # 1~4주차 코퍼스(5,120청크)·골든셋 26문항 재스윕으로 확정 — Hit Rate@5=0.885, MRR=0.782
-TOP_N = 5
+HYBRID_TOP_N = 20  # 1단계: 하이브리드 검색으로 넓게 뽑는 후보 수 (Part 4-2)
+RERANK_TOP_N = 5   # 2단계: Cross-Encoder 재랭킹 후 LLM에 전달할 최종 청크 수
 THRESHOLD = 0.0
 
 WEEK_DIRS = {
@@ -47,18 +58,15 @@ def build_pipeline():
         index_chunks(all_chunks, vector_store)
 
     bm25_index = BM25Index([c.chunk_id for c in all_chunks], [c.text for c in all_chunks])
+    chat_model = get_chat_model()
 
-    return vector_store, bm25_index, chunk_by_id, id_week_map
+    return vector_store, bm25_index, chunk_by_id, id_week_map, chat_model
 
 
-def format_result(chunk_id: str, score: float, chunk_by_id: dict) -> str:
-    chunk = chunk_by_id.get(chunk_id)
-    if chunk is None:
-        return f"  [{chunk_id}] score={score:.3f} (원본 청크 정보 없음)"
-    snippet = chunk.text.replace("\n", " ")[:150]
+def format_source(source) -> str:
     return (
-        f"  [{chunk.script_file.stem}] ({chunk.start_timestamp}~{chunk.end_timestamp}) "
-        f"score={score:.3f}\n    {snippet}"
+        f"  [{Path(source.source_file).stem}] ({source.start_timestamp}~{source.end_timestamp}) "
+        f"신뢰도={source.confidence} score={source.score:.3f}"
     )
 
 
@@ -72,12 +80,13 @@ def parse_week_filter(query: str) -> tuple[str, int | None]:
 
 
 def main() -> None:
-    print("=== 강의 스크립트 검색기 ===")
+    print("=== 강의 스크립트 QA 시스템 ===")
     print("질문을 입력하세요 (종료: exit 또는 quit)")
     print("특정 주차만 검색: '/week 4 <질문>'\n")
 
-    vector_store, bm25_index, chunk_by_id, id_week_map = build_pipeline()
-    print("준비 완료.\n")
+    vector_store, bm25_index, chunk_by_id, id_week_map, chat_model = build_pipeline()
+    tracing_on = enable_tracing()
+    print(f"준비 완료. (LangSmith 모니터링: {'켜짐' if tracing_on else '꺼짐'})\n")
 
     while True:
         try:
@@ -92,18 +101,18 @@ def main() -> None:
             break
 
         query, week_filter = parse_week_filter(query)
-        results = execute_hybrid_search(
-            query, vector_store, bm25_index, alpha=ALPHA, top_n=TOP_N, threshold=THRESHOLD,
+        reranked = retrieve_and_rerank(
+            query, vector_store, bm25_index, chunk_by_id, alpha=ALPHA,
+            hybrid_top_n=HYBRID_TOP_N, rerank_top_n=RERANK_TOP_N, threshold=THRESHOLD,
             week_filter=week_filter, id_week_map=id_week_map,
         )
+        answer = generate_answer(query, reranked, chunk_by_id, chat_model=chat_model)
 
-        if not results:
-            print("관련 내용을 찾지 못했습니다.\n")
-            continue
-
-        print(f"상위 {len(results)}개 결과:")
-        for chunk_id, score in results:
-            print(format_result(chunk_id, score, chunk_by_id))
+        print(f"\n{answer.answer_text}\n")
+        if answer.sources:
+            print(f"출처 ({len(answer.sources)}개):")
+            for source in answer.sources:
+                print(format_source(source))
         print()
 
 

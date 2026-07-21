@@ -1,0 +1,100 @@
+decomposition:
+  seed_ref: "seed-v2.yaml"
+  trd_ref: "docs/TRD.md"
+  total_tasks: 12
+  tasks:
+    - id: "T-014"
+      ac_ref: "AC-010"
+      layer: "data"
+      description: "data/llm_client.py — get_chat_model(): ANTHROPIC_API_KEY 환경변수를 확인하고 ChatAnthropic(claude-haiku-4-5-20251001)을 반환. 키 없으면 명확한 에러로 즉시 실패"
+      test: "키 미설정 시 RuntimeError, 키 설정 시 ChatAnthropic 인스턴스 반환 (수동 검증 — 실제 API 키 필요)"
+      depends_on: []
+      estimated_minutes: 15
+
+    - id: "T-015"
+      ac_ref: "AC-009"
+      layer: "data"
+      description: "data/reranker.py — 다국어 Cross-Encoder(mmarco-mMiniLMv2-L12-H384-v1) lazy singleton + score_pairs(query, texts)"
+      test: "수동 검증 — 실제 모델 다운로드 필요, 관련 쌍이 높은 점수를 받는지 확인"
+      depends_on: []
+      estimated_minutes: 15
+
+    - id: "T-016"
+      ac_ref: "AC-012"
+      layer: "data"
+      description: "data/rag_embeddings.py — E5LangchainEmbeddings: 기존 embedding_model.py의 encode_query/encode_passage를 langchain_core.embeddings.Embeddings 인터페이스로 어댑팅"
+      test: "수동 검증 — RAGAS 평가 실행 시 임베딩 호출이 에러 없이 되는지 확인"
+      depends_on: []
+      estimated_minutes: 10
+
+    - id: "T-017"
+      ac_ref: "AC-013"
+      layer: "data"
+      description: "data/langsmith_setup.py — enable_tracing(): LANGCHAIN_API_KEY/LANGSMITH_API_KEY 유무로 tracing 환경변수 설정, 없으면 조용히 False"
+      test: "키 없을 때 False 반환 + 환경변수 미설정 확인, 키 있을 때 True 반환 + LANGCHAIN_TRACING_V2 설정 확인"
+      depends_on: []
+      estimated_minutes: 10
+
+    - id: "T-018"
+      ac_ref: "AC-012"
+      layer: "data"
+      description: "data/golden_set_loader.py — GoldenSetItem에 ground_truth: str | None = None 추가 (하위호환), golden_set.example.yaml에 예시 필드 추가"
+      test: "ground_truth 없을 때 None, 있을 때 정상 파싱 (기존 test_golden_set_loader.py에 케이스 추가)"
+      depends_on: []
+      estimated_minutes: 10
+
+    - id: "T-019"
+      ac_ref: "AC-009"
+      layer: "logic"
+      description: "core/reranking.py — rerank_candidates(query_text, candidates, chunk_by_id, top_n, score_fn=None): 후보 청크 텍스트로 (query,text) 쌍을 만들어 채점, top_n으로 절삭"
+      test: "fake score_fn으로 top_n 절삭·정렬 검증, chunk_by_id에 없는 후보 스킵 검증"
+      depends_on: ["T-015"]
+      estimated_minutes: 20
+
+    - id: "T-020"
+      ac_ref: "AC-009"
+      layer: "logic"
+      description: "core/rag_pipeline.py — retrieve_and_rerank(): execute_hybrid_search(top_n=hybrid_top_n) → rerank_candidates(top_n=rerank_top_n) 2-stage 조합. core/scoring.py는 수정하지 않음"
+      test: "fake hybrid search + fake rerank 결과 합성 검증, 빈 하이브리드 결과 시 재랭킹 미호출 검증"
+      depends_on: ["T-019"]
+      estimated_minutes: 15
+
+    - id: "T-021"
+      ac_ref: "AC-011"
+      layer: "logic"
+      description: "core/confidence.py — confidence_label(score, high=0.7, medium=0.4): 순수 함수, 점수를 높음/보통/낮음으로 분류"
+      test: "경계값(0.7/0.4 정확히, 그 위/아래) 검증, 커스텀 임계값 검증"
+      depends_on: []
+      estimated_minutes: 10
+
+    - id: "T-022"
+      ac_ref: "AC-010"
+      layer: "logic"
+      description: "core/rag_chain.py — SourceCitation/RagAnswer dataclass, build_prompt(4원칙 시스템 프롬프트), build_context_text(--- 구분자), generate_answer(): Empty Retrieval 시 LLM 미호출, 아니면 prompt.invoke → chat_model.invoke → StrOutputParser().invoke 명시적 체이닝"
+      test: "reranked 빈 리스트면 LLM 미호출 확인, context가 --- 로 join되는지, SourceCitation의 confidence가 입력 score와 일치하는지 (fake chat_model)"
+      depends_on: ["T-014", "T-021"]
+      estimated_minutes: 30
+
+    - id: "T-023"
+      ac_ref: "AC-012"
+      layer: "logic"
+      description: "core/rag_evaluation.py — collect_eval_samples(): ground_truth 있는 항목만 파이프라인 실행해 RAGAS 입력(user_input/response/retrieved_contexts/reference) 조립. run_ragas_evaluation(): EvaluationDataset+evaluate()로 4대 지표 계산"
+      test: "collect_eval_samples를 fake retrieve_fn/generate_fn으로 검증 (ground_truth 없는 항목 스킵, dict 형태 확인). run_ragas_evaluation의 실제 evaluate() 호출은 수동 검증"
+      depends_on: ["T-016", "T-020", "T-022"]
+      estimated_minutes: 30
+
+    - id: "T-024"
+      ac_ref: "AC-010"
+      layer: "presentation"
+      description: "cli/main.py — build_pipeline()에서 chat_model 준비 + langsmith_setup.enable_tracing() 호출, 메인 루프를 retrieve_and_rerank+generate_answer로 교체, 답변+출처+신뢰도 출력으로 전환. HYBRID_TOP_N=20/RERANK_TOP_N=5 상수 추가"
+      test: "수동 검증 (AC-008과 동일 방침) — 실제 질문/범위 밖 질문 입력해 답변·출처·Empty Retrieval 경로 확인"
+      depends_on: ["T-017", "T-020", "T-022"]
+      estimated_minutes: 25
+
+    - id: "T-025"
+      ac_ref: "AC-012"
+      layer: "presentation"
+      description: "scripts/run_ragas_evaluation.py — run_evaluation.py와 동일 구조로 파이프라인 빌드 → ground_truth 있는 골든셋 필터 → collect_eval_samples → run_ragas_evaluation → 4개 지표 출력, 표본 수 부족 시 경고"
+      test: "수동 검증 — golden_set.yaml에 ground_truth 몇 개 채운 뒤 실행해 지표 출력 확인"
+      depends_on: ["T-023"]
+      estimated_minutes: 15

@@ -6,12 +6,19 @@
 # relevance_score: 3=완전히 정답, 2=상당히 관련, 1=약간 관련, 0=무관
 # chunk_id(expected_chunk)는 core.chunking.chunk_script()가 실제로 생성하는 값과
 # 정확히 일치해야 합니다.
+#
+# ground_truth (선택, 5주차 확장): RAGAS Context Recall(Part 6-1)을 계산하려면 질문에 대한
+# 정답 텍스트가 필요합니다. LLM이나 이 도구가 자동으로 채워주지 않습니다 — 반드시 직접
+# 작성·검토하세요("Ground Truth는 도메인 전문가가 검토해야 한다", Part 6-1 강의 원칙).
+# 비워두면(필드 자체를 생략하면) 해당 항목은 Hit Rate/MRR 평가에만 쓰이고 RAGAS 평가에서는
+# 자동으로 제외됩니다.
 
 golden_set:
   - item_id: "gs-01"
     question_text: "가상환경 없이도 프로젝트별 의존성을 격리해주는 최신 파이썬 패키지 매니저는?"
     expected_chunk: "1차시_ 1-1. 예시 강의 제목_0"
     relevance_score: 3
+    ground_truth: "uv입니다. Rust로 작성되어 빠르고, 가상환경 생성부터 의존성 관리까지 하나의 도구로 처리합니다."
 
   - item_id: "gs-02"
     question_text: "실무에서 가장 많이 쓰이는 벡터 인덱싱 알고리즘 두 가지는?"

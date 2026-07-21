@@ -52,3 +52,40 @@ def test_load_empty_golden_set(tmp_path: Path):
     f.write_text("golden_set: []\n", encoding="utf-8")
 
     assert load_golden_set(f) == []
+
+
+def test_ground_truth_defaults_to_none_when_absent(tmp_path: Path):
+    f = tmp_path / "golden_set.yaml"
+    f.write_text(
+        """
+golden_set:
+  - item_id: "gs-01"
+    question_text: "질문"
+    expected_chunk: "파일_0"
+    relevance_score: 3
+""",
+        encoding="utf-8",
+    )
+
+    items = load_golden_set(f)
+
+    assert items[0].ground_truth is None
+
+
+def test_ground_truth_parses_when_present(tmp_path: Path):
+    f = tmp_path / "golden_set.yaml"
+    f.write_text(
+        """
+golden_set:
+  - item_id: "gs-01"
+    question_text: "질문"
+    expected_chunk: "파일_0"
+    relevance_score: 3
+    ground_truth: "정답 텍스트입니다."
+""",
+        encoding="utf-8",
+    )
+
+    items = load_golden_set(f)
+
+    assert items[0].ground_truth == "정답 텍스트입니다."

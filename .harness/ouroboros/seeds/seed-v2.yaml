@@ -1,0 +1,187 @@
+# Seed Specification v2
+# Generated: 2026-07-21
+# Supersedes: seed-v1.yaml (seed-v1은 불변이므로 새 버전으로 확장한다)
+# Source: 직접 대화 기반 확정 (정식 /interview 트랜스크립트 없음). 5주차(4-2 Re-ranking,
+#   5-1 LangChain 파이프라인, 5-2 근거추적, 6-1 RAGAS, 6-2 LangSmith) 수강 완료 후,
+#   AskUserQuestion으로 핵심 결정 확인: 생성 LLM=Anthropic Claude Haiku, 범위=Part 7 수준
+#   풀세트(Re-ranking+RAG체인+RAGAS+LangSmith), 검색기 → QA 시스템으로 전환.
+# WARNING: This file is immutable. To change, create a new version.
+
+version: 2
+created: "2026-07-21T00:00:00"
+interview_ref: "conversation (no formal interview transcript, see header)"
+
+goal:
+  summary: >
+    1~4주차로 완성한 순수 검색기를, 5주차(Re-ranking·LangChain·근거추적·RAGAS·LangSmith)를
+    반영해 "질문 → 답변+출처+신뢰도"를 돌려주는 QA 시스템으로 확장한다.
+  detail: >
+    하이브리드 검색(4-1) 결과를 Cross-Encoder로 재랭킹(4-2)해 좁힌 뒤, LangChain 기반
+    RAG 체인(5-1)으로 답변을 생성한다. 프롬프트에 환각 방지 규칙과 인용 유도를 넣고,
+    답변에는 항상 출처 청크·신뢰도 등급을 함께 반환한다(5-2). golden_set에 ground_truth를
+    추가해 RAGAS 4대 지표(Faithfulness/Answer Relevancy/Context Precision/Context Recall,
+    6-1)로 답변 품질을 정량 평가하고, LangSmith(6-2)로 파이프라인 각 단계를 옵션으로
+    추적할 수 있게 한다.
+  non_goals:
+    - "FastAPI 등으로 API 서빙하는 것 — 11주차 범위 (seed-v1과 동일하게 유지)"
+    - "배포/클라우드 운영 — 12주차 범위 (seed-v1과 동일하게 유지)"
+    - "Streamlit 등 웹 UI — Part 7 종합 프로젝트 범위이나 이 프로젝트는 CLI를 유지하기로 결정"
+    - "LangSmith 유료 플랜, 프로덕션 규모 모니터링 — 개인 학습용 무료 티어로 충분"
+
+constraints:
+  must:
+    - "seed-v1의 검색 파이프라인(하이브리드 검색, alpha 확정 방식)은 그대로 유지한다"
+    - "재랭킹은 하이브리드 검색 결과를 좁히는 2단계 구조로만 동작한다 (1단계 core/scoring.py는 수정하지 않는다)"
+    - "재랭킹 결과가 0개(Empty Retrieval)이면 LLM을 호출하지 않고 즉시 안내 메시지를 반환한다"
+    - "LLM API 키는 ANTHROPIC_API_KEY 환경변수로만 관리한다 (코드에 하드코딩 금지)"
+    - "RAGAS 평가는 golden_set.yaml에서 ground_truth가 채워진 항목만 대상으로 한다"
+    - "LangSmith 연동은 계정/키가 없어도 파이프라인이 100% 정상 동작해야 한다 (옵션 기능, 실패해도 QA 기능을 막지 않는다)"
+    - "답변의 출처(SourceCitation)는 LLM 출력 텍스트와 무관하게 코드에서 직접 구성한다 (신뢰도 표시의 정확성 보장)"
+  must_not:
+    - "cli/에서 langchain_anthropic·ragas·sentence_transformers를 직접 import하지 않는다 (core/를 경유)"
+  should:
+    - "신뢰도 등급 임계값(0.7/0.4)은 출발점이며, 실제 도메인 샘플로 재조정할 수 있어야 한다"
+    - "RAGAS 평가용 ground_truth는 최소 20개 이상 확보해야 통계적으로 의미 있다"
+
+acceptance_criteria:
+  - id: "AC-009"
+    description: "하이브리드 검색으로 hybrid_top_n(기본 20)개를 넓게 뽑은 뒤, Cross-Encoder로 재평가해 rerank_top_n(기본 5)개로 좁힌다."
+    verification: "automated"
+    priority: "must"
+    complexity: "medium"
+  - id: "AC-010"
+    description: "재랭킹된 청크를 근거로 LangChain LCEL 기반 체인이 답변을 생성한다. 시스템 프롬프트에 4원칙(문서 근거만/모르면 모른다/추측 금지/출처 언급)을 담는다. 재랭킹 결과가 없으면 LLM 호출 없이 안내 메시지를 반환한다."
+    verification: "automated"
+    priority: "must"
+    complexity: "medium"
+  - id: "AC-011"
+    description: "답변과 함께 출처 청크 목록(파일명·시간범위·점수·신뢰도 등급)을 항상 반환한다."
+    verification: "automated"
+    priority: "must"
+    complexity: "low"
+  - id: "AC-012"
+    description: "golden_set 중 ground_truth가 있는 항목만으로 실제 파이프라인을 실행해 RAGAS 4대 지표(Faithfulness/Answer Relevancy/Context Precision/Context Recall)를 계산한다."
+    verification: "manual"
+    priority: "must"
+    complexity: "high"
+  - id: "AC-013"
+    description: "LANGCHAIN_API_KEY 또는 LANGSMITH_API_KEY가 설정되어 있으면 LangSmith tracing을 활성화하고, 없으면 조용히 비활성 상태로 남긴다 (파이프라인 코드 변경 없이)."
+    verification: "manual"
+    priority: "should"
+    complexity: "low"
+
+ontology:
+  entities:
+    - name: "GoldenSetItem"
+      fields:
+        - {name: "ground_truth", type: "string", required: false}
+      relationships: []
+      note: "seed-v1의 GoldenSetItem에 필드 추가 (하위호환, 기존 26문항은 그대로 파싱됨)"
+    - name: "SourceCitation"
+      fields:
+        - {name: "chunk_id", type: "string", required: true}
+        - {name: "source_file", type: "string", required: true}
+        - {name: "start_timestamp", type: "string", required: true}
+        - {name: "end_timestamp", type: "string", required: true}
+        - {name: "score", type: "number", required: true}
+        - {name: "confidence", type: "string", required: true}
+      relationships:
+        - {target: "ScriptChunk", type: "belongs_to"}
+    - name: "RagAnswer"
+      fields:
+        - {name: "answer_text", type: "string", required: true}
+        - {name: "sources", type: "list", required: true}
+      relationships:
+        - {target: "SourceCitation", type: "has_many"}
+  actions:
+    - name: "RerankCandidates"
+      actor: "Logic가 조율, Data(Cross-Encoder)가 채점"
+      input: "query_text, 하이브리드 검색 후보 리스트"
+      output: "재랭킹된 (chunk_id, score) 리스트, 최대 rerank_top_n개"
+      side_effects: []
+    - name: "GenerateAnswer"
+      actor: "Logic가 조율, Data(LLM)가 생성"
+      input: "query_text, 재랭킹된 청크 리스트"
+      output: "RagAnswer (answer_text + SourceCitation 리스트)"
+      side_effects:
+        - "재랭킹 결과가 있으면 LLM API를 호출한다 (비용 발생)"
+        - "재랭킹 결과가 없으면 LLM을 호출하지 않는다"
+    - name: "RunRagasEvaluation"
+      actor: "Logic가 조율(파이프라인 실행+샘플 조립), Data(RAGAS/LLM)가 채점"
+      input: "ground_truth가 있는 GoldenSetItem 리스트"
+      output: "RAGAS 4대 지표 요약 dict + 질문별 점수 DataFrame"
+      side_effects:
+        - "항목마다 검색+재랭킹+생성+RAGAS 판정 LLM 호출이 발생한다 (비용 발생)"
+    - name: "EnableLangsmithTracing"
+      actor: "Presentation 시작 시 1회 호출, Data가 환경변수 설정"
+      input: "없음 (환경변수로 키 유무 판단)"
+      output: "tracing 활성화 여부 (bool)"
+      side_effects:
+        - "키가 있으면 LANGCHAIN_TRACING_V2/LANGCHAIN_PROJECT 환경변수를 설정한다"
+        - "키가 없으면 아무 것도 하지 않는다 (파이프라인 정상 동작)"
+  invariants:
+    - "RerankCandidates는 하이브리드 검색 결과(top_n=hybrid_top_n)를 입력으로만 받는다 — core/scoring.py의 계산식은 바뀌지 않는다"
+    - "reranked가 빈 리스트이면 GenerateAnswer는 LLM을 호출하지 않는다"
+    - "SourceCitation.confidence는 score를 core/confidence.py의 임계값(기본 0.7/0.4)으로 분류한 값이다"
+    - "RunRagasEvaluation은 GoldenSetItem.ground_truth가 없는 항목을 건너뛴다"
+    - "EnableLangsmithTracing의 반환값이 False여도 GenerateAnswer/RunRagasEvaluation은 정상 동작한다"
+
+architecture:
+  pattern: "3-tier-layered"
+  layers:
+    presentation:
+      description: "seed-v1과 동일 + 답변/출처/신뢰도 출력, LangSmith tracing 활성화 호출"
+      directories: ["cli/"]
+      cannot_access: ["database", "external_services", "langchain_anthropic", "ragas", "sentence_transformers (직접 import 금지, core/ 경유)"]
+    logic:
+      description: "seed-v1 책임 + RerankCandidates, GenerateAnswer, RunRagasEvaluation 조율"
+      directories: ["core/"]
+      cannot_access: []
+    data:
+      description: "seed-v1 책임 + LLM 클라이언트(Anthropic), Cross-Encoder, RAGAS용 임베딩 어댑터, LangSmith 환경설정"
+      directories: ["data/"]
+      cannot_access: ["presentation"]
+  layer_communication:
+    presentation_to_logic: "direct call (seed-v1과 동일)"
+    logic_to_data: "repository-style 함수 호출 + DI 패턴(xxx_fn=None 기본 인자로 lazy import), seed-v1과 동일 스타일"
+    data_format: "dataclass (RagAnswer, SourceCitation 포함)"
+
+scope:
+  mvp:
+    - "AC-009~AC-013 (Re-ranking, RAG 답변 생성, 출처·신뢰도, RAGAS 평가, LangSmith 옵션 연동)"
+  future:
+    - "FastAPI로 API화"
+    - "Docker 배포"
+    - "Streamlit 웹 UI"
+    - "응답 속도 최적화"
+    - "전체 강의자료(pptx/pdf)까지 검색 대상 확장"
+    - "LangSmith 프로덕션 규모 모니터링·알림"
+
+tech_decisions:
+  - decision: "생성 LLM: Anthropic Claude Haiku (langchain-anthropic)"
+    reason: "사용자가 API 키 방식을 선택했고, 프로바이더 하나로 시작해 SDK 의존성을 최소화(GEN-004). 프롬프트/체인 구조는 프로바이더에 무관하게 동일해 나중에 다른 프로바이더 추가가 쉬움"
+    alternatives_considered:
+      - "OpenAI gpt-4o-mini (강의에서 언급된 저비용 옵션이나, 이번엔 Anthropic으로 확정)"
+      - "Ollama 로컬 (무료지만, 이번엔 실제 API 키 방식을 연습하기로 결정)"
+  - decision: "Cross-Encoder: cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 (다국어)"
+    reason: "강의 스크립트가 한국어라 영어 전용 MS MARCO 모델은 부적합. e5 임베딩을 다국어로 고른 것과 같은 이유"
+    alternatives_considered:
+      - "cross-encoder/ms-marco-MiniLM-L12-v2 (영어 전용, 한국어 성능 저하 우려로 배제)"
+  - decision: "ragas==0.2.15로 버전 고정 (>=0.2,<0.3)"
+    reason: >
+      pip 설치 중 실제로 겪은 버그: ragas 최신(0.4.3)과 langchain-community 최신(0.4.2) 조합에서
+      ragas/llms/base.py가 langchain_community.chat_models.vertexai를 무조건 import하는데,
+      langchain-community 0.4.x에서 그 서브모듈이 제거되어 ImportError가 발생했다. langchain-community를
+      0.3.19로 내리자 해결됐지만, 그러면 langchain-core도 0.3.x대로 맞아야 해서 langchain-anthropic·
+      langchain-openai도 0.3.x대(<0.4)로 함께 고정해야 했다. 강의가 설명한 API(SingleTurnSample,
+      EvaluationDataset, LLMContextPrecisionWithReference 등)도 0.2.x 기준이라 버전 고정이 이중으로 맞다.
+    alternatives_considered:
+      - "ragas 최신(0.4.3) 그대로 사용 (langchain_community.chat_models.vertexai ImportError로 즉시 실패, 채택 불가)"
+  - decision: "LangSmith는 옵션 기능으로 구현 (계정 없으면 조용히 비활성화)"
+    reason: "개인 학습 프로젝트라 모든 사용자가 LangSmith 계정을 만들 필요는 없어야 한다. 6-2 강의의 '환경변수 3줄, 코드 변경 없음' 철학을 그대로 따르되, 3줄이 없어도 안 깨지게 만듦"
+    alternatives_considered:
+      - "LangSmith 키를 필수로 요구 (개인 프로젝트에 과한 진입장벽이라 배제)"
+  - decision: "RAG 체인은 LCEL '|' 연산자 대신 각 단계를 명시적으로 .invoke()하는 방식으로 구현"
+    reason: "chat_model을 손으로 만든 Fake로 교체해 테스트하려면 Fake가 Runnable을 상속하거나 __call__을 구현할 필요 없이 .invoke()만 있으면 되기 때문 (기존 프로젝트의 '모킹 라이브러리 없는 Fake 클래스' 테스트 컨벤션과 일관성 유지)"
+    alternatives_considered:
+      - "prompt | chat_model | StrOutputParser() (강의 원문 그대로의 문법이나, Fake가 Runnable 프로토콜을 구현해야 해서 테스트가 복잡해짐)"
