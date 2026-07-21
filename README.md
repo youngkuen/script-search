@@ -217,7 +217,8 @@ Truth는 도메인 전문가가 검토해야 한다").
 - [x] 4주차 기법 적용: 비대칭 임베딩, 코사인 거리공간, 주차 메타데이터 필터, 유니코드 전처리, 청킹 전략 비교
 - [x] 5주차 기법 적용: Cross-Encoder 재랭킹, LangChain RAG 체인, 근거추적, RAGAS 평가, LangSmith 옵션 연동 (완료 — `seed-v2.yaml`)
 - [x] golden_set.yaml에 RAGAS용 ground_truth 26개 전부 채우고 실제 RAGAS 평가 실행 (완료 — Faithfulness 0.877 등, 위 결과 참고)
-- [ ] 4주차 골든 6문항 초안 검토·보정, 필요 시 청킹 전략(merged/tokens) 채택 여부 결정
+- [x] 4주차 골든 6문항 검토 완료 — 데이터는 전부 정확, 다만 2문항(gs-24/26)이 실제 검색에서 top-5 miss(원인 진단은 `docs/EXPERIMENTS.md`)
+- [ ] 위 gs-24 사례(블록 경계 절단) 검증 기준으로 청킹 전략(merged/tokens) 채택 여부 결정
 - [x] Answer Relevancy(0.784, 4대 지표 중 최저) 개선 시도 — 2개 버전 비교 후 "질문 주제 되풀이" 채택(0.790), 상세 기록은 `docs/EXPERIMENTS.md`
 - [ ] RAGAS 자체의 run-to-run 변동성을 먼저 정량화(동일 프롬프트 반복 실행)해 위 개선이 노이즈인지 재검증
 - [ ] (범위 밖으로 남겨둔) FastAPI 서빙·배포·Streamlit UI는 해당 주차 학습 후 별도 프로젝트로 확장 검토
