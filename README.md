@@ -266,6 +266,8 @@ Truth는 도메인 전문가가 검토해야 한다").
 - [x] golden_set 커버리지 확장 완료 — 미커버 64개 파일 중 15개 파일에 문항 추가(26→41), alpha 0.4→0.5 재확정, Hit Rate@5=0.976·MRR=0.859 (`docs/EXPERIMENTS.md` "golden_set 15문항 확장", `docs/adr.yaml` ADR-010)
 - [ ] gs-26 유형("여러 강의에 흩어진 사실")은 청킹과 무관 — 쿼리 확장 등 별도 접근 검토
 - [x] 새로 추가된 15문항(gs-27~41)의 ground_truth로 RAGAS 재측정 완료 — Faithfulness 0.958→0.948, Answer Relevancy 0.859→0.833로 소폭 하락(문항 다양화로 인한 정직한 하락, `docs/EXPERIMENTS.md` 참고), Context Precision/Recall은 변화 없음
+- [x] `LLMDidNotFinishException`(41문항 중 8건) 원인 규명 — `get_chat_model()`이 `max_tokens` 미지정으로 기본값 1024를 쓰고 있었음. judge 전용 `max_tokens=4096`으로 상향(`data/llm_client.py`, `core/rag_evaluation.py`, `docs/adr.yaml` ADR-011)
+- [ ] 위 수정이 실제로 실패율을 낮추는지 미검증 — Anthropic API 크레딧 부족(`credit balance is too low`)으로 재실행이 막힘. 크레딧 충전 후 `scripts/run_ragas_evaluation.py` 재실행 필요
 - [ ] (범위 밖으로 남겨둔) FastAPI 서빙·배포·Streamlit UI는 해당 주차 학습 후 별도 프로젝트로 확장 검토
 
 ## 테스트

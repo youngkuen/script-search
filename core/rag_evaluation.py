@@ -18,6 +18,11 @@ _METRIC_COLUMNS = [
     "context_recall",
 ]
 
+# get_chat_model()의 기본 max_tokens(1024, 실제 QA 답변 기준)는 RAGAS의 judge 프롬프트에는
+# 부족할 때가 있다(문장 분해·근거 대조 추론이 길어질 수 있음) — LLMDidNotFinishException으로
+# 관측됨(2026-07-22, docs/EXPERIMENTS.md 참고). judge 전용으로만 넉넉하게 늘린다.
+RAGAS_JUDGE_MAX_TOKENS = 4096
+
 
 def collect_eval_samples(
     golden_set,
@@ -83,7 +88,7 @@ def run_ragas_evaluation(samples: list[dict], chat_model=None, embeddings=None) 
     if chat_model is None:
         from data.llm_client import get_chat_model
 
-        chat_model = get_chat_model()
+        chat_model = get_chat_model(max_tokens=RAGAS_JUDGE_MAX_TOKENS)
     if embeddings is None:
         from data.rag_embeddings import E5LangchainEmbeddings
 
