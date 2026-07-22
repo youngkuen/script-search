@@ -203,7 +203,7 @@ QA 시스템(v2)은 답변 생성에 Anthropic Claude API를 쓰므로 **`ANTHRO
 ```bash
 cp .env.example .env && vi .env            # ANTHROPIC_API_KEY 값 채우기
 uv sync                                    # 의존성 설치
-uv run pytest -q                           # 테스트 (74개)
+uv run pytest -q                           # 테스트 (76개)
 uv run python -m cli.main                  # QA CLI 실행 (질문 → 답변+출처+신뢰도)
 uv run python scripts/run_evaluation.py    # 재색인 + alpha 스윕/검증 (Hit Rate·MRR, 검색 단계만)
 uv run python scripts/run_ragas_evaluation.py  # RAGAS 4대 지표 평가 (검색+생성 전체, LLM 호출 비용 발생)
@@ -241,7 +241,7 @@ Truth는 도메인 전문가가 검토해야 한다").
 - [x] gs-23 회귀 원인 심층 분석 완료 — 검색 실패가 아니라 같은 개념(asymmetric embedding)이 이론(10차시)·실습(13차시) 두 곳에 설명돼 있어 정답이 여러 개였던 것으로 확인(`docs/EXPERIMENTS.md`). golden_set의 단일 `expected_chunk` 스키마 한계로 결론
 - [x] golden_set 스키마를 `expected_chunk`(단일) → `expected_chunks`(복수 허용)로 확장 완료 — gs-23에 정답 3개 반영 (`docs/adr.yaml` ADR-009)
 - [x] 나머지 25개 항목도 전수 검토 완료 — 7개 항목(gs-03/05/14/16/17/20/21)에 복수 정답 추가 반영, 최종 Hit Rate@5=0.962·MRR=0.872 (`docs/EXPERIMENTS.md` "golden_set 26개 전수 검토")
-- [ ] 이번 전수 검토는 top-5(rerank 이후) 결과 기준으로만 확인 — hybrid_top_n(20)까지 넓혀 6~20위권의 숨은 정답 후보도 있는지 확인 필요
+- [x] hybrid_top_n(20)까지 넓혀 6~20위권(재랭킹 이전) 숨은 정답 후보 26개 항목 전체 확인 완료 — gs-03에 정답 1개 추가, gs-01은 강의마다 다른 벤치마크 수치(사실 상충)로 판단해 반영 보류(`docs/EXPERIMENTS.md` "hybrid_top_n 6~20위권 확장 검토")
 - [ ] gs-26 유형("여러 강의에 흩어진 사실")은 청킹과 무관 — 쿼리 확장 등 별도 접근 검토
 - [ ] (범위 밖으로 남겨둔) FastAPI 서빙·배포·Streamlit UI는 해당 주차 학습 후 별도 프로젝트로 확장 검토
 
@@ -249,5 +249,5 @@ Truth는 도메인 전문가가 검토해야 한다").
 
 ```bash
 uv run pytest -q
-# 74 passed
+# 76 passed
 ```
