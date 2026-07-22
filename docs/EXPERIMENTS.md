@@ -324,5 +324,39 @@ Hit Rate@5를 `chunk_id` 정확히 일치로 판정하는 현재 방식(`core/ev
 이미 이 문제를 인지하고 substring 포함 여부로 판정 방식을 바꿨던 것과 같은 종류의 한계다.
 
 ### 결정 / 후속 TODO
-- [x] gs-23은 골든셋/코드 수정 없이 "알려진 한계"로 기록하고 종결 — 검색 파이프라인의 결함이 아니므로.
-- [ ] golden_set 스키마를 `expected_chunk`(단일) 대신 `expected_chunks`(리스트, 복수 허용)로 확장하는 것을 향후 검토 — 이번처럼 같은 개념이 여러 소스에 있는 문항에 유용할 것.
+- [x] ~~gs-23은 골든셋/코드 수정 없이 "알려진 한계"로 기록하고 종결~~ → 후속 검토에서 뒤집힘. 아래 "golden_set 스키마 확장" 항목 참고 — 결국 `expected_chunks`로 스키마를 확장해 실제로 반영했다.
+- [x] golden_set 스키마를 `expected_chunk`(단일) 대신 `expected_chunks`(리스트, 복수 허용)로 확장 완료.
+
+---
+
+## 2026-07-22 — golden_set 스키마 확장: expected_chunk → expected_chunks
+
+### 배경
+gs-23 심층 분석에서 "알려진 한계"로 남겨뒀던 결론을 다시 검토했다. `core/evaluation.py`의
+`hit_rate_at_k`/`mrr` 함수는 애초에 `relevant: list[set[str]]` 타입으로 설계되어 있어서
+항목당 정답을 여러 개 받을 수 있는 구조였다 — 막혀 있던 곳은 오직 `GoldenSetItem.expected_chunk`가
+단일 문자열이었다는 데이터 레이어 한 곳뿐이었다. 확장 비용이 낮고(스코어링 로직은 이미
+호환됨) 이득이 분명해(gs-23류 문항을 정확히 평가) 실제로 진행했다.
+
+### 마이그레이션
+1. `data/golden_set_loader.py`: `GoldenSetItem.expected_chunk: str` → `expected_chunks: list[str]`.
+2. `core/evaluation.py::sweep_alpha()`: `relevant.append({item.expected_chunk})` → `relevant.append(set(item.expected_chunks))` (한 줄 변경).
+3. `scripts/compare_chunking.py`: `build_needles()`/`evaluate()`가 항목당 여러 needle을 받아 "그중 하나라도 매칭되면 hit"으로 판정하도록 확장.
+4. `golden_set.yaml` 26개 항목 전부 `expected_chunks: [...]`로 변환. gs-23만 3개 값(이론 1개 + 실습 2개)으로 확장, 나머지는 기존 값 그대로 1개짜리 리스트.
+5. 테스트 갱신 + `sweep_alpha`가 복수 정답을 실제로 credit하는지 검증하는 테스트 추가.
+
+### 결과
+alpha 재스윕(0.4 유지, 재확정):
+
+| 지표 | 스키마 확장 전 | 스키마 확장 후 |
+|---|---|---|
+| Hit Rate@5 | 0.923 | **0.962** |
+| MRR | 0.788 | **0.827** |
+
+gs-23이 이제 정당하게 hit으로 인정된다(1문항 = 26분의 1 = 0.038, 정확히 관측된 개선폭과 일치).
+검색 파이프라인이나 코퍼스는 전혀 안 바꿨다 — 순전히 "이미 맞게 검색되고 있던 것을 골든셋이
+오답으로 잘못 채점하고 있던" 평가 방법론 버그를 고친 결과다.
+
+### 결정 / 후속 TODO
+- [x] **golden_set 스키마 확장 채택** — `expected_chunks` 리스트로 전환, alpha=0.4 유지 확인.
+- [ ] 나머지 25개 항목도 혹시 "정답이 여러 곳에 있는" 케이스가 더 있는지 전수 검토(현재는 gs-23만 확인·반영됨).

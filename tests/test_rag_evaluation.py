@@ -9,7 +9,7 @@ from core.rag_evaluation import collect_eval_samples, run_ragas_evaluation
 class FakeGoldenItem:
     item_id: str
     question_text: str
-    expected_chunk: str
+    expected_chunks: list[str]
     relevance_score: int
     ground_truth: str | None = None
 
@@ -34,8 +34,8 @@ def fake_generate_fn(query_text, reranked, chunk_by_id):
 
 def test_items_without_ground_truth_are_skipped():
     golden_set = [
-        FakeGoldenItem("gs-01", "질문1", "chunk_0", 3, ground_truth="정답1"),
-        FakeGoldenItem("gs-02", "질문2", "chunk_1", 3, ground_truth=None),
+        FakeGoldenItem("gs-01", "질문1", ["chunk_0"], 3, ground_truth="정답1"),
+        FakeGoldenItem("gs-02", "질문2", ["chunk_1"], 3, ground_truth=None),
     ]
     chunk_by_id = {"a": FakeChunk("a의 텍스트")}
 
@@ -49,7 +49,7 @@ def test_items_without_ground_truth_are_skipped():
 
 
 def test_sample_shape_matches_ragas_input_fields():
-    golden_set = [FakeGoldenItem("gs-01", "질문1", "chunk_0", 3, ground_truth="정답1")]
+    golden_set = [FakeGoldenItem("gs-01", "질문1", ["chunk_0"], 3, ground_truth="정답1")]
     chunk_by_id = {"a": FakeChunk("a의 텍스트")}
 
     samples = collect_eval_samples(
@@ -65,7 +65,7 @@ def test_sample_shape_matches_ragas_input_fields():
 
 
 def test_no_items_with_ground_truth_yields_empty_samples():
-    golden_set = [FakeGoldenItem("gs-01", "질문1", "chunk_0", 3, ground_truth=None)]
+    golden_set = [FakeGoldenItem("gs-01", "질문1", ["chunk_0"], 3, ground_truth=None)]
 
     samples = collect_eval_samples(
         golden_set, None, None, {}, alpha=0.5,

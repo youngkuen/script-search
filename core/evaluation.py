@@ -42,7 +42,7 @@ def sweep_alpha(
                 embed_fn=embed_fn,
             )
             results.append([chunk_id for chunk_id, _ in search_results])
-            relevant.append({item.expected_chunk})
+            relevant.append(set(item.expected_chunks))
 
         hr = hit_rate_at_k(results, relevant, k=top_n)
         m = mrr(results, relevant)

@@ -18,7 +18,7 @@ def _fake_embed(text: str):
 
 
 def test_sweep_alpha_selects_exactly_one_run():
-    golden_set = [GoldenSetItem(item_id="gs-1", question_text="질문", expected_chunk="a", relevance_score=3)]
+    golden_set = [GoldenSetItem(item_id="gs-1", question_text="질문", expected_chunks=["a"], relevance_score=3)]
 
     runs = sweep_alpha(
         golden_set,
@@ -36,7 +36,7 @@ def test_sweep_alpha_selects_exactly_one_run():
 
 
 def test_sweep_alpha_default_produces_11_candidates():
-    golden_set = [GoldenSetItem(item_id="gs-1", question_text="질문", expected_chunk="a", relevance_score=3)]
+    golden_set = [GoldenSetItem(item_id="gs-1", question_text="질문", expected_chunks=["a"], relevance_score=3)]
 
     runs = sweep_alpha(golden_set, FakeVectorStore(), FakeBM25Index(), top_n=5, threshold=0.0, embed_fn=_fake_embed)
 
@@ -46,7 +46,7 @@ def test_sweep_alpha_default_produces_11_candidates():
 
 def test_sweep_alpha_favors_vector_when_vector_is_more_accurate():
     # 검색 결과에서 a가 정답인데, bm25는 b를 더 높게 치고 vector는 a를 정확히 1위로 찾음
-    golden_set = [GoldenSetItem(item_id="gs-1", question_text="질문", expected_chunk="a", relevance_score=3)]
+    golden_set = [GoldenSetItem(item_id="gs-1", question_text="질문", expected_chunks=["a"], relevance_score=3)]
 
     runs = sweep_alpha(golden_set, FakeVectorStore(), FakeBM25Index(), top_n=5, threshold=0.0, embed_fn=_fake_embed)
     pure_vector = next(r for r in runs if r.alpha == 1.0)
@@ -54,6 +54,20 @@ def test_sweep_alpha_favors_vector_when_vector_is_more_accurate():
 
     assert pure_vector.mrr == 1.0  # a가 1위
     assert pure_bm25.mrr == 0.5  # a가 2위
+
+
+def test_sweep_alpha_credits_hit_when_any_expected_chunk_matches():
+    # b가 bm25에서 raw score가 더 높아 pure-bm25(alpha=0.0)에서는 b가 1위로 뽑힌다.
+    # expected_chunks에 a와 b를 둘 다 정답으로 인정하면, b가 1위여도 mrr=1.0이어야 한다
+    # (같은 개념을 여러 청크가 답할 수 있는 gs-23류 상황을 검증).
+    golden_set = [
+        GoldenSetItem(item_id="gs-1", question_text="질문", expected_chunks=["a", "b"], relevance_score=3)
+    ]
+
+    runs = sweep_alpha(golden_set, FakeVectorStore(), FakeBM25Index(), top_n=5, threshold=0.0, embed_fn=_fake_embed)
+    pure_bm25 = next(r for r in runs if r.alpha == 0.0)
+
+    assert pure_bm25.mrr == 1.0
 
 
 def test_check_thresholds_reports_pass_fail():

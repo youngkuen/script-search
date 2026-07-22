@@ -2,7 +2,7 @@
 
 전략마다 chunk_id 체계가 달라지므로, 정답을 chunk_id로 매칭하지 않고
 "검색된 청크의 텍스트가 정답 블록의 텍스트를 포함하는가"로 판정한다(전략 독립적).
-정답 블록 텍스트는 기본 block 청킹 기준 golden_set의 expected_chunk에서 가져온다.
+정답 블록 텍스트는 기본 block 청킹 기준 golden_set의 expected_chunks에서 가져온다(항목당 여러 개 가능).
 """
 
 import sys
@@ -40,16 +40,20 @@ STRATEGIES = {
 
 
 def build_needles(valid_files, golden_set):
-    """golden_set의 expected_chunk(block 기준)를 정답 블록 텍스트(needle)로 변환한다."""
+    """golden_set의 expected_chunks(block 기준)를 정답 블록 텍스트(needle) 목록으로 변환한다.
+
+    항목당 정답이 여러 개일 수 있다(gs-23처럼 같은 개념을 이론+실습이 각각 설명하는 경우) —
+    그중 하나라도 검색되면 hit로 판정한다.
+    """
     block_text_by_id = {}
     for sf in valid_files:
         for chunk in chunk_script(sf, strategy="block"):
             block_text_by_id[chunk.chunk_id] = chunk.text
     needles = []
     for item in golden_set:
-        text = block_text_by_id.get(item.expected_chunk)
-        if text:
-            needles.append((item.question_text, text))
+        texts = [block_text_by_id[cid] for cid in item.expected_chunks if cid in block_text_by_id]
+        if texts:
+            needles.append((item.question_text, texts))
     return needles
 
 
@@ -65,10 +69,14 @@ def evaluate(strategy, kwargs, valid_files, needles):
     bm25 = BM25Index([c.chunk_id for c in all_chunks], [c.text for c in all_chunks])
 
     hits, reciprocal_ranks = 0, []
-    for question, needle in needles:
+    for question, needle_texts in needles:
         results = execute_hybrid_search(question, store, bm25, alpha=ALPHA, top_n=TOP_N)
         rank = next(
-            (i + 1 for i, (cid, _) in enumerate(results) if needle in text_by_id.get(cid, "")),
+            (
+                i + 1
+                for i, (cid, _) in enumerate(results)
+                if any(needle in text_by_id.get(cid, "") for needle in needle_texts)
+            ),
             None,
         )
         if rank:
