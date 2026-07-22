@@ -229,7 +229,8 @@ Truth는 도메인 전문가가 검토해야 한다").
 - [x] gs-24 사례(블록 경계 절단) 검증 기준으로 청킹 전략 채택 여부 결정 — **tokens 채택** (Hit Rate@5 0.885→0.923, RAGAS 4개 지표 전부 개선, `docs/adr.yaml` ADR-007)
 - [x] Answer Relevancy(0.784, 4대 지표 중 최저) 개선 시도 — 2개 버전 비교 후 "질문 주제 되풀이" 채택(0.790), 상세 기록은 `docs/EXPERIMENTS.md`
 - [ ] RAGAS 자체의 run-to-run 변동성을 먼저 정량화(동일 프롬프트 반복 실행)해 프롬프트 개선이 노이즈인지 재검증
-- [ ] gs-23 회귀(tokens 전환으로 새로 top-5 miss) 원인을 더 깊이 파볼 것 — 경쟁 청크(13차시 실습)와의 병합 효과 추정
+- [x] gs-23 회귀 원인 심층 분석 완료 — 검색 실패가 아니라 같은 개념(asymmetric embedding)이 이론(10차시)·실습(13차시) 두 곳에 설명돼 있어 정답이 여러 개였던 것으로 확인(`docs/EXPERIMENTS.md`). golden_set의 단일 `expected_chunk` 스키마 한계로 결론
+- [ ] golden_set 스키마를 `expected_chunk`(단일) → `expected_chunks`(복수 허용)로 확장하는 것 검토
 - [ ] gs-26 유형("여러 강의에 흩어진 사실")은 청킹과 무관 — 쿼리 확장 등 별도 접근 검토
 - [ ] (범위 밖으로 남겨둔) FastAPI 서빙·배포·Streamlit UI는 해당 주차 학습 후 별도 프로젝트로 확장 검토
 
