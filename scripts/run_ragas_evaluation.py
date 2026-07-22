@@ -26,7 +26,7 @@ WEEK_DIRS = {
     4: CORPUS_ROOT / "4주차_스크립트",
 }
 COLLECTION_NAME = "script_chunks_v3"  # tokens 청킹 전환(2026-07-22) — 이전 컬렉션과 벡터 표현이 다름
-ALPHA = 0.4  # golden_set 복수 정답 전수 검토(2026-07-22) 후 재확정 — Hit Rate@5=0.962, MRR=0.872
+ALPHA = 0.5  # golden_set 41문항 확장(2026-07-22) 후 재확정 — Hit Rate@5=0.976, MRR=0.859
 MIN_RECOMMENDED_SAMPLES = 20  # Part 6-1: RAGAS는 통계적 유의미성을 위해 20개 이상 권장
 
 

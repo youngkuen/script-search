@@ -24,7 +24,7 @@ from core.rag_chain import generate_answer  # noqa: E402
 
 load_dotenv_if_present(PROJECT_ROOT / ".env")  # ANTHROPIC_API_KEY 등을 .env에서 읽어 os.environ에 채운다
 
-ALPHA = 0.4  # golden_set 복수 정답 전수 검토(2026-07-22) 후 재확정 — Hit Rate@5=0.962, MRR=0.872 (1,158청크)
+ALPHA = 0.5  # golden_set 41문항 확장(2026-07-22) 후 재확정 — Hit Rate@5=0.976, MRR=0.859 (1,158청크)
 HYBRID_TOP_N = 20  # 1단계: 하이브리드 검색으로 넓게 뽑는 후보 수 (Part 4-2)
 RERANK_TOP_N = 5   # 2단계: Cross-Encoder 재랭킹 후 LLM에 전달할 최종 청크 수
 THRESHOLD = 0.0
